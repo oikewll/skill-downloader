@@ -107,8 +107,23 @@ check_site_support() {
 check_disk_space() {
     local required_space_mb=500  # Require at least 500MB free
     local available_space_mb
+    local check_dir="$DOWNLOAD_DIR"
 
-    available_space_mb=$(df -BM "$DOWNLOAD_DIR" | tail -1 | awk '{print $4}' | tr -d 'M')
+    # If download directory doesn't exist yet, check parent or root
+    if [ ! -d "$check_dir" ]; then
+        check_dir=$(dirname "$check_dir")
+        if [ ! -d "$check_dir" ]; then
+            check_dir="/"
+        fi
+    fi
+
+    available_space_mb=$(df -BM "$check_dir" 2>/dev/null | tail -1 | awk '{print $4}' | tr -d 'M' | tr -d ' ')
+
+    # If df failed, assume we have enough space
+    if [ -z "$available_space_mb" ] || [ "$available_space_mb" -eq 0 ]; then
+        log_info "Could not check disk space, continuing anyway..."
+        return 0
+    fi
 
     if [ "$available_space_mb" -lt "$required_space_mb" ]; then
         log_error "Insufficient disk space. Available: ${available_space_mb}MB, Required: ${required_space_mb}MB"
@@ -164,7 +179,12 @@ download_video() {
     # Build yt-dlp command
     local cmd="yt-dlp"
     cmd+=" -f \"$QUALITY\""
-    cmd+=" --merge-output-format \"${FORMAT}\""
+    
+    # Only use --merge-output-format if FORMAT is not "best"
+    if [ "$FORMAT" != "best" ]; then
+        cmd+=" --merge-output-format \"${FORMAT}\""
+    fi
+    
     cmd+=" -o \"$output_file\""
     cmd+=" --write-info-json"
     cmd+=" --write-description"
