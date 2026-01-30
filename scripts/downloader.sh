@@ -311,13 +311,21 @@ main() {
     # Download
     download_video "$url" || exit 1
 
-    # Find downloaded video file
-    VIDEO_FILE=$(find "$DOWNLOAD_DIR" -type f -name "*[${VIDEO_ID}].*" | head -1)
+    # Find downloaded video file (newest mp4 file in download directory)
+    VIDEO_FILE=$(find "$DOWNLOAD_DIR" -type f -name "*.mp4" -mmin -5 -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+
+    # Fallback: if no recent file found, try by ID
+    if [ ! -f "$VIDEO_FILE" ]; then
+        VIDEO_FILE=$(find "$DOWNLOAD_DIR" -type f -name "*[${VIDEO_ID}].*" 2>/dev/null | head -1)
+    fi
 
     if [ ! -f "$VIDEO_FILE" ]; then
         log_error "Could not find downloaded video file"
+        log_error "Tried finding by: recent mp4 files and ID [$VIDEO_ID]"
         exit 1
     fi
+
+    log_info "Found video file: $(basename "$VIDEO_FILE")"
 
     # Extract keyframes
     extract_keyframes "$VIDEO_FILE"
